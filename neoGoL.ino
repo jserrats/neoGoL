@@ -16,7 +16,7 @@ const uint8_t mHeight = 32;
 CRGB leds[NUM_LEDS];
 int matrix [mWidth][mHeight];
 int old_matrix [mWidth][mHeight];
-//int tmp_matrix [mWidth][mHeight];
+int very_old_matrix [mWidth][mHeight];
 
 void setup() {
   Serial.begin(115200);
@@ -26,8 +26,8 @@ void setup() {
 
   FastLED.addLeds<LED_TYPE, DATA_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
   FastLED.setBrightness(BRIGHTNESS);
-  
-  firstFrame();
+
+  randomFrame();
   paintFrame();
   //debugMatrix();
 
@@ -38,10 +38,13 @@ void loop()
 {
   //debugMatrix();
 
-  delay(100);
+  //delay(100);
   gameOfLife();
+  if(checkStable()){
+    randomFrame();
+  }
   paintFrame();
- 
+  
   //debugMatrix();
   // do some periodic updates
   // EVERY_N_SECONDS( 10 ) { randomFrame(); }
@@ -81,11 +84,20 @@ void gameOfLife() {
   }
 }
 
-void checkStable(){
-  
+bool checkStable() {
+  bool stable = true;
+  for (int i = 0; i < mHeight; i++) {
+    for (int j = 0; j < mWidth; j++) {
+      if(very_old_matrix[i][j] != matrix[i][j]){
+        stable=false;
+        break;
+      }
+    }
+  }
+  return stable;
 }
 
-void firstFrame() {
+void randomFrame() {
   //Serial.println("Drawing a random frame");
   random16_add_entropy(random(10000));
   for (int i = 0; i < mHeight; i++) {
@@ -161,6 +173,7 @@ void debugOldMatrix() {
 void swapMatrix() {
   for (int i = 0; i < mHeight; i++) {
     for (int j = 0; j < mWidth; j++) {
+      very_old_matrix[i][j] = old_matrix[i][j];
       old_matrix[i][j] = matrix[i][j];
     }
   }
