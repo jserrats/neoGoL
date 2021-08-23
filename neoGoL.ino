@@ -1,4 +1,5 @@
 #include <FastLED.h>
+#include <CRC32.h>
 
 FASTLED_USING_NAMESPACE
 
@@ -14,11 +15,15 @@ const uint8_t mHeight = 32;
 
 
 CRGB leds[NUM_LEDS];
-int matrix [mWidth][mHeight];
-int old_matrix [mWidth][mHeight];
-int very_old_matrix [mWidth][mHeight];
+uint8_t matrix [mWidth][mHeight];
+uint8_t old_matrix [mWidth][mHeight];
+uint8_t very_old_matrix [mWidth][mHeight];
 
-uint32_t colour[] = {CRGB::DarkBlue, CRGB::Blue, CRGB::Aqua, CRGB::Aquamarine, CRGB::Azure,CRGB::Lavender};
+
+uint32_t history [mWidth];
+int history_pointer = 0;
+
+uint32_t colour[] = {CRGB::DarkBlue, CRGB::Blue, CRGB::Aqua, CRGB::Aquamarine, CRGB::Azure, CRGB::Lavender};
 
 void setup() {
   Serial.begin(115200);
@@ -29,26 +34,20 @@ void setup() {
   FastLED.addLeds<LED_TYPE, DATA_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
   FastLED.setBrightness(BRIGHTNESS);
 
-  randomFrame();
+  firstFrame();
   paintFrame();
-  //debugMatrix();
-
 }
 
 
 void loop()
 {
-  //debugMatrix();
-
-  //delay(1000);
+  //delay(100);
   gameOfLife();
-  //debugMatrix();
   if (checkStable()) {
-    randomFrame();
+    firstFrame();
   }
   paintFrame();
 
-  //debugMatrix();
   // do some periodic updates
   // EVERY_N_SECONDS( 10 ) { randomFrame(); }
 
@@ -56,12 +55,6 @@ void loop()
 
 void gameOfLife() {
   //Serial.println("Creating life");
-  /*
-  for (int i = 0; i < mHeight; i++) {
-    for (int j = 0; j < mWidth; j++) {
-      matrix[i][j] = 0;
-    }
-  }*/
   //debugMatrix();
   for (int i = 0; i < mWidth; i++) {
     for (int j = 0; j < mHeight; j++) {
@@ -80,7 +73,7 @@ void gameOfLife() {
         //dead
         if (neighbours == 3) {
           //birth
-          matrix[i][j]=1;
+          matrix[i][j] = 1;
         }
       }
 
@@ -88,17 +81,28 @@ void gameOfLife() {
   }
 }
 
-bool checkStable() {
-  bool stable = true;
+uint32_t calcCRC() {
+  CRC32 crc;
   for (int i = 0; i < mHeight; i++) {
     for (int j = 0; j < mWidth; j++) {
-      if ((very_old_matrix[i][j]>0) != (matrix[i][j]>0)) {
-        stable = false;
-        break;
-      }
+      crc.update(matrix[i][j] > 0);
     }
   }
-  return stable;
+  return crc.finalize();
+}
+
+bool checkStable() {
+  uint32_t checksum = calcCRC();
+  for (int i; i < mWidth; i++) {
+    if (history[i] == checksum) {
+      return true;
+    }
+  }
+
+  history[history_pointer] = checksum;
+  history_pointer = (history_pointer + 1) % mWidth;
+
+  return false;
 }
 
 void randomFrame() {
@@ -112,22 +116,15 @@ void randomFrame() {
   //Serial.println("Finished drawing a random frame");
 }
 
+void firstFrame() {
+  randomFrame();
+}
+
 int countNeighbours(int x, int y) {
-  /*Serial.println();
-    Serial.print("[+] Counting neighbours for: ");
-    Serial.print(x);
-    Serial.print(" ");
-    Serial.println(y);
-  */int neighbours = 0;
+  int neighbours = 0;
 
   for (int i = x - 1; i < x + 2; i++) {
     for (int j = y - 1; j < y + 2; j++) {
-      /*
-        Serial.print("i:");
-        Serial.println(i);
-        Serial.print("j:");
-        Serial.println(j);
-      */
       int ii = (i + mWidth) % mWidth;
       int jj = (j + mHeight) % mHeight;
       /* Serial.print("Value of neighbour XY: ");
@@ -163,17 +160,6 @@ void debugMatrix() {
   }
 }
 
-void debugOldMatrix() {
-  //Serial.println("Current state of OLD matrix:");
-  for (int i = mHeight - 1; i >= 0; i--)  {
-    for (int j = 0; j < mWidth; j++) {
-      //Serial.print(old_matrix[j][i]);
-      //Serial.print(" ");
-    }
-    //Serial.println();
-  }
-}
-
 void swapMatrix() {
   for (int i = 0; i < mHeight; i++) {
     for (int j = 0; j < mWidth; j++) {
@@ -198,10 +184,10 @@ void paintFrame() {
     int cycles = matrix[x][y];
     if (cycles == 0) {
       leds[i] = CRGB::Black;
-    } else if (cycles > sizeof(colour)/sizeof(colour[0])) {
+    } else if (cycles > sizeof(colour) / sizeof(colour[0])) {
       leds[i] = CRGB::White;
     } else {
-      leds[i] = colour[cycles-1];
+      leds[i] = colour[cycles - 1];
     }
   }
   //Serial.println("Showing new frame");
