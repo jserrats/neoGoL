@@ -17,10 +17,12 @@ CRGB leds[NUM_LEDS];
 uint8_t matrix [mWidth][mHeight];
 uint8_t old_matrix [mWidth][mHeight];
 
-uint32_t history [mWidth];
+const uint8_t history_len = 128;
+uint32_t history [history_len];
 int history_pointer = 0;
 
-uint32_t colour[] = {CRGB::Black, CRGB::Blue, CRGB::Teal, CRGB::DarkCyan, CRGB::Aqua, CRGB::Aquamarine,CRGB::Azure};
+//https://github.com/FastLED/FastLED/wiki/Pixel-reference
+uint32_t colour[] = {CRGB::Black, CRGB::Blue, CRGB::Teal, CRGB::DarkCyan, CRGB::Aqua, CRGB::Aquamarine, CRGB::Azure, CRGB::Turquoise};
 uint8_t len_colour = sizeof(colour) / sizeof(colour[0]);
 
 void setup() {
@@ -40,15 +42,13 @@ void setup() {
 void loop()
 {
   delay(75);
-
   gameOfLife();
   if (checkStable()) {
-    firstFrame();
+    Serial.println();
+    Serial.println("==== GAME OF LIFE ====");
+    randomFrame();
   }
   paintFrame();
-
-  // EVERY_N_SECONDS( 10 ) { randomFrame(); }
-
 }
 
 void gameOfLife() {
@@ -90,14 +90,18 @@ uint32_t calcCRC() {
 
 bool checkStable() {
   uint32_t checksum = calcCRC();
-  for (int i; i < mWidth; i++) {
+  //Serial.println(checksum,HEX);
+  //Serial.println("---------------");
+  for (int i = 0; i < history_len; i++) {
+    //Serial.println(history[i],HEX);
     if (history[i] == checksum) {
       return true;
     }
   }
+  //Serial.println();
 
   history[history_pointer] = checksum;
-  history_pointer = (history_pointer + 1) % mWidth;
+  history_pointer = (history_pointer + 1) % history_len;
 
   return false;
 }
@@ -114,8 +118,22 @@ void randomFrame() {
 void firstFrame() {
   //testColours();
   randomFrame();
+  //oscillator();
+  //glider();
 }
 
+void oscillator() {
+  matrix[3][1] = 1;
+  matrix[3][2] = 1;
+  matrix[3][3] = 1;
+}
+void glider() {
+  matrix[1][2] = 1;
+  matrix[2][1] = 1;
+  matrix[3][1] = 1;
+  matrix[3][2] = 1;
+  matrix[3][3] = 1;
+}
 void testColours() {
   for (int i = 0; i < len_colour; i++) {
     matrix[i][0] = i;
@@ -168,10 +186,10 @@ void paintFrame() {
     } else {
       x = i % mWidth;
     }
-    
+
     int cycles = matrix[x][y];
     if (cycles >= len_colour ) {
-      leds[i] = colour[len_colour-1];
+      leds[i] = colour[len_colour - 1];
     } else {
       leds[i] = colour[cycles];
     }
